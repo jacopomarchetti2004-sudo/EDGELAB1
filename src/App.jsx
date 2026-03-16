@@ -3392,7 +3392,9 @@ function Impostazioni({c,dark,setDark,reload,conti,strategie}){
     const strats=await db.strategie.toArray();
     const conti_=await db.conti.toArray();
     const trades=await db.trade.toArray();
-    const data=JSON.stringify({version:"1.0",exported:new Date().toISOString(),strategie:strats,conti:conti_,trades},null,2);
+    const btProj=await db.bt_progetti.toArray();
+    const btTrades=await db.bt_trade.toArray();
+    const data=JSON.stringify({version:"2.0",exported:new Date().toISOString(),strategie:strats,conti:conti_,trades,bt_progetti:btProj,bt_trade:btTrades},null,2);
     const blob=new Blob([data],{type:"application/json"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
@@ -3405,13 +3407,23 @@ function Impostazioni({c,dark,setDark,reload,conti,strategie}){
     const text=await file.text();
     try{
       const data=JSON.parse(text);
-      const stratIdMap={};const contoIdMap={};
-      let addedStrat=0,addedConti=0,addedTrade=0;
+      const stratIdMap={};const contoIdMap={};const projIdMap={};
+      let addedStrat=0,addedConti=0,addedTrade=0,addedProj=0,addedBtTrade=0;
+      // strategie
       if(data.strategie){for(const s of data.strategie){const oldId=s.id;const {id,...rest}=s;const newId=await db.strategie.add(rest);stratIdMap[oldId]=newId;addedStrat++;}}
+      // conti
       if(data.conti){for(const cn of data.conti){const oldId=cn.id;const {id,...rest}=cn;if(rest.strategie_ids&&Array.isArray(rest.strategie_ids)){rest.strategie_ids=rest.strategie_ids.map(function(sid){return stratIdMap[sid]||sid;});}const newId=await db.conti.add(rest);contoIdMap[oldId]=newId;addedConti++;}}
+      // trade journal
       if(data.trades){for(const t of data.trades){const {id,...rest}=t;if(rest.conto_id&&contoIdMap[rest.conto_id])rest.conto_id=contoIdMap[rest.conto_id];if(rest.strategia_id&&stratIdMap[rest.strategia_id])rest.strategia_id=stratIdMap[rest.strategia_id];await db.trade.add(rest);addedTrade++;}}
+      // backtest progetti
+      if(data.bt_progetti){for(const p of data.bt_progetti){const oldId=p.id;const {id,...rest}=p;const newId=await db.bt_progetti.add(rest);projIdMap[oldId]=newId;addedProj++;}}
+      // backtest trade
+      if(data.bt_trade){for(const t of data.bt_trade){const {id,...rest}=t;if(rest.progetto_id&&projIdMap[rest.progetto_id])rest.progetto_id=projIdMap[rest.progetto_id];await db.bt_trade.add(rest);addedBtTrade++;}}
+      // supporto file vecchi (da export console con chiave "trade" invece di "trades")
+      if(!data.trades&&data.trade){for(const t of data.trade){const {id,...rest}=t;await db.trade.add(rest);addedTrade++;}}
+      if(!data.bt_trade&&data.bt_trade){for(const t of data.bt_trade){const {id,...rest}=t;await db.bt_trade.add(rest);addedBtTrade++;}}
       await reload();
-      setAlertData({title:"Import completato",message:"Aggiunti: "+addedStrat+" strategie, "+addedConti+" conti, "+addedTrade+" trade",type:"success"});
+      setAlertData({title:"Import completato ✅",message:"Strategie: "+addedStrat+" · Conti: "+addedConti+" · Trade: "+addedTrade+" · Progetti BT: "+addedProj+" · Trade BT: "+addedBtTrade,type:"success"});
     }catch(err){setAlertData({title:"Errore import",message:err.message,type:"error"});}
   }
 
@@ -3797,7 +3809,7 @@ function Ottimizzazione({c,trades,strategie,conti}){
           );})}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,marginRight:4}}>
-          {stressTest&&(
+          {tab==="storico"&&stressTest&&(
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 10px",borderRadius:8,background:c.rd+"10",border:"1px solid "+c.rd+"30"}}>
               <div style={{display:"flex",alignItems:"center",gap:5}}>
                 <span style={{fontSize:9,fontWeight:700,color:c.rd}}>MFE -</span>
@@ -3815,7 +3827,7 @@ function Ottimizzazione({c,trades,strategie,conti}){
           <button
             onClick={function(){setStressTest(!stressTest);}}
             title="Stress Test: simula slippage e imprecisione umana riducendo MFE e peggiorando MAE"
-            style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:20,border:"1px solid "+(stressTest?c.rd:c.bd),background:stressTest?c.rd+"15":"transparent",color:stressTest?c.rd:c.txm,fontSize:11,fontWeight:stressTest?700:400,cursor:"pointer",fontFamily:"inherit"}}
+            style={{display:tab==="proiezione"?"none":"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:20,border:"1px solid "+(stressTest?c.rd:c.bd),background:stressTest?c.rd+"15":"transparent",color:stressTest?c.rd:c.txm,fontSize:11,fontWeight:stressTest?700:400,cursor:"pointer",fontFamily:"inherit"}}
           >
             🔥 Stress {stressTest?"ON":"OFF"}
           </button>
@@ -3829,14 +3841,14 @@ function Ottimizzazione({c,trades,strategie,conti}){
         ):(
           <>
             {/* STRESS TEST BANNER */}
-            {stressTest&&(
+            {tab==="storico"&&stressTest&&(
               <div style={{padding:"8px 14px",borderRadius:9,background:c.rd+"10",border:"1px solid "+c.rd+"40",marginBottom:12,display:"flex",gap:8,alignItems:"center"}}>
                 <span style={{fontSize:14}}>🔥</span>
                 <span style={{fontSize:11,color:c.rd,fontWeight:600}}>Stress Test Attivo — MFE ridotto del {stressMfe}%, MAE peggiorato del {stressMae}%. I valori MFE/MAE sono modificati per simulare condizioni reali peggiori (slippage, uscite imprecise).</span>
               </div>
             )}
             {/* WARNING MFE */}
-            {lowMfeWarning&&(
+            {tab==="storico"&&lowMfeWarning&&(
               <div style={{padding:"8px 14px",borderRadius:9,background:c.am+"12",border:"1px solid "+c.am+"40",marginBottom:12,display:"flex",gap:8,alignItems:"center"}}>
                 <span style={{fontSize:14}}>⚠️</span>
                 <span style={{fontSize:11,color:c.am,fontWeight:500}}>Solo {pctMfe}% dei trade ha MFE inserito. I risultati simulati potrebbero non essere accurati. Inserisci MFE su più trade per migliorare la qualità dell'analisi.</span>
@@ -3844,7 +3856,7 @@ function Ottimizzazione({c,trades,strategie,conti}){
             )}
 
             {/* BOT — 3 ALTERNATIVE */}
-            {threeOpt&&(
+            {tab==="storico"&&threeOpt&&(
               <div style={{marginBottom:14}}>
                 <div style={{fontSize:11,fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
                   <span style={{fontSize:16}}>🤖</span> Bot Ottimizzazione — 3 Alternative
@@ -3911,7 +3923,7 @@ function Ottimizzazione({c,trades,strategie,conti}){
             )}
 
             {/* PERSONALIZZA WR TARGET */}
-            {optimal&&(
+            {tab==="storico"&&optimal&&(
               <div style={{background:c.card,borderRadius:11,padding:"12px 14px",border:"1px solid "+c.bd,marginBottom:12}}>
                 <div style={{fontSize:10,fontWeight:700,marginBottom:8}}>🎛 Personalizza Win Rate Target</div>
                 <div style={{fontSize:10,color:c.txm,marginBottom:8}}>Forza un vincolo WR minimo — il bot trova la combo più profittevole con quel vincolo.</div>
@@ -3929,49 +3941,27 @@ function Ottimizzazione({c,trades,strategie,conti}){
               </div>
             )}
 
-            {/* PARAMETRI */}
-            <div style={{background:c.card,borderRadius:11,padding:"13px 16px",border:"1px solid "+c.bd,marginBottom:12}}>
-              <div style={{fontSize:11,fontWeight:700,marginBottom:10}}>Parametri Simulazione</div>
-              <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
-                <div>
-                  <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:5}}>TAKE PROFIT</div>
-                  <select value={tp} onChange={function(e){setTp(parseFloat(e.target.value));}} style={{padding:"7px 10px",borderRadius:8,border:"1px solid "+c.ac+"50",background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",cursor:"pointer",minWidth:90}}>
-                    {tpSteps.map(function(s){return <option key={s} value={s}>{s}R{s<=maxMfe&&mfeR.length>0?" ✓":""}</option>;})}
-                  </select>
-                  {mfeR.length>0&&<div style={{fontSize:9,color:c.gr,marginTop:3}}>MFE max reale: {maxMfe}R</div>}
-                </div>
-                <div>
-                  <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:5}}>BREAKEVEN</div>
-                  <select value={be} onChange={function(e){setBe(parseFloat(e.target.value));}} style={{padding:"7px 10px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",cursor:"pointer",minWidth:120}}>
-                    {beSteps.map(function(s){return <option key={s} value={s}>{s===0?"Nessun BE":s+"R"}</option>;})}
-                  </select>
-                </div>
-                {tab==="proiezione"&&(
-                  <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"flex-end"}}>
-                    <div>
-                      <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:5}}>TRADE DA PROIETTARE</div>
-                      <div style={{display:"flex",gap:5}}>
-                        {[50,100,200,500,1000].map(function(n){return(
-                          <button key={n} onClick={function(){setNProj(n);}} style={{padding:"6px 10px",borderRadius:7,border:"1px solid "+(nProj===n?c.ac:c.bd),background:nProj===n?c.ac+"15":"transparent",color:nProj===n?c.ac:c.txm,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:nProj===n?700:400}}>{n}</button>
-                        );})}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:5}}>SIMULAZIONI</div>
-                      <div style={{display:"flex",gap:5}}>
-                        {[100,200,500,1000].map(function(n){return(
-                          <button key={n} onClick={function(){setNSim(n);}} style={{padding:"6px 10px",borderRadius:7,border:"1px solid "+(nSim===n?c.ac:c.bd),background:nSim===n?c.ac+"15":"transparent",color:nSim===n?c.ac:c.txm,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:nSim===n?700:400}}>{n}</button>
-                        );})}
-                      </div>
-                    </div>
-                    <button onClick={runProiezione} disabled={projLoading||filtered.length<3}
-                      style={{padding:"8px 18px",borderRadius:8,border:"none",background:c.ac,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:projLoading||filtered.length<3?0.5:1}}>
-                      {projLoading?"⏳ Calcolo...":"▶ Esegui Proiezione"}
-                    </button>
+            {/* PARAMETRI — solo Storico */}
+            {tab==="storico"&&(
+              <div style={{background:c.card,borderRadius:11,padding:"13px 16px",border:"1px solid "+c.bd,marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:700,marginBottom:10}}>Parametri Simulazione</div>
+                <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
+                  <div>
+                    <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:5}}>TAKE PROFIT</div>
+                    <select value={tp} onChange={function(e){setTp(parseFloat(e.target.value));}} style={{padding:"7px 10px",borderRadius:8,border:"1px solid "+c.ac+"50",background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",cursor:"pointer",minWidth:90}}>
+                      {tpSteps.map(function(s){return <option key={s} value={s}>{s}R{s<=maxMfe&&mfeR.length>0?" ✓":""}</option>;})}
+                    </select>
+                    {mfeR.length>0&&<div style={{fontSize:9,color:c.gr,marginTop:3}}>MFE max reale: {maxMfe}R</div>}
                   </div>
-                )}
+                  <div>
+                    <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:5}}>BREAKEVEN</div>
+                    <select value={be} onChange={function(e){setBe(parseFloat(e.target.value));}} style={{padding:"7px 10px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",cursor:"pointer",minWidth:120}}>
+                      {beSteps.map(function(s){return <option key={s} value={s}>{s===0?"Nessun BE":s+"R"}</option>;})}
+                    </select>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* ══ TAB STORICO ══ */}
             {tab==="storico"&&(
