@@ -5721,6 +5721,7 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
       direzione:trade.direzione||"L",
       r_result:trade.r_result!=null?trade.r_result:"",
       mfe:trade.mfe||"",
+      mfe_time:trade.mfe_time?trade.mfe_time.slice(0,16):"",
       params:trade.params||[],
       note:trade.note||"",
       confidence:trade.confidence||0,
