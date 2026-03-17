@@ -2470,16 +2470,30 @@ function Analytics({c,trades,strategie,conti}){
   const [selSessione,setSelSessione]=useState([]);
   const [periodoA,setPeriodoA]=useState({from:"",to:""});
   const [periodoB,setPeriodoB]=useState({from:"",to:""});
+  const [anTradeMode,setAnTradeMode]=useState("all"); // "all" | "sequential"
   function toggleC(id){setSelConti(function(p){return p.includes(id)?p.filter(function(x){return x!==id;}):[...p,id];});}
   function toggleS(id){setSelStrat(function(p){return p.includes(id)?p.filter(function(x){return x!==id;}):[...p,id];});}
   function toggleSess(s){setSelSessione(function(p){return p.includes(s)?p.filter(function(x){return x!==s;}):[...p,s];});}
   function getSessione(iso){return getSessioneWithTz(iso);}
-  const filtered=trades.filter(function(t){
+  const filteredAll=trades.filter(function(t){
     if(selConti.length>0&&!selConti.includes(t.conto_id)) return false;
     if(selStrat.length>0&&!selStrat.includes(t.strategia_id)) return false;
     if(selSessione.length>0&&!selSessione.includes(getSessione(t.data_apertura))) return false;
     return true;
-  });
+  }).sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);});
+  // Filtro sequenziale
+  const filteredSeq=(function(){
+    var seq=[];var lastExit=null;
+    filteredAll.forEach(function(t){
+      var openT=new Date(t.data_apertura);
+      if(lastExit&&openT<lastExit) return;
+      seq.push(t);
+      lastExit=t.data_chiusura?new Date(t.data_chiusura):openT;
+    });
+    return seq;
+  })();
+  const filtered=anTradeMode==="sequential"?filteredSeq:filteredAll;
+  const anSeqSkipped=filteredAll.length-filteredSeq.length;
   // helper: filtra per periodo (usato nel tab Confronto)
   function filteredByPeriodo(p){
     return filtered.filter(function(t){
@@ -2557,6 +2571,17 @@ function Analytics({c,trades,strategie,conti}){
       </div>
       <div style={{flex:1,overflow:"auto",padding:"14px 20px"}}>
         <DisclaimerCampione n={filtered.length} c={c}/>
+        {/* FILTRO MODALITÀ TRADE — Analytics Live */}
+        {filtered.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 14px",borderRadius:9,background:c.card,border:"1px solid "+(anTradeMode==="sequential"?c.am+"60":c.bd)}}>
+            <div style={{fontSize:10,fontWeight:700,color:c.txm}}>MODALITÀ:</div>
+            <select value={anTradeMode} onChange={function(e){setAnTradeMode(e.target.value);}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(anTradeMode==="sequential"?c.am:c.ac+"50"),background:c.inp,color:c.tx,fontSize:11,fontWeight:600,fontFamily:"inherit",outline:"none",cursor:"pointer"}}>
+              <option value="all">Tutti i trade (anche sovrapposti)</option>
+              <option value="sequential">Un trade alla volta (sequenziale)</option>
+            </select>
+            {anTradeMode==="sequential"&&<div style={{fontSize:10,color:c.am,fontWeight:700}}>{filtered.length}/{filteredAll.length} trade · {anSeqSkipped} saltati</div>}
+          </div>
+        )}
         {unit==="%"&&filtered.length>0&&filtered.filter(function(t){return t.pnl_eur!=null;}).length===0&&(
           <div style={{margin:"0 0 10px 0",padding:"9px 14px",borderRadius:9,background:c.rd+"10",border:"1px solid "+c.rd+"35",display:"flex",gap:9,alignItems:"flex-start"}}>
             <span style={{fontSize:14,flexShrink:0}}>⚠️</span>
@@ -3642,15 +3667,31 @@ function Ottimizzazione({c,trades,strategie,conti}){
   const [targetWr,setTargetWr]=useState(null);
   const [nProj,setNProj]=useState(50);
   const [stressTest,setStressTest]=useState(false);
-  const [stressMfe,setStressMfe]=useState(10); // % riduzione MFE
-  const [stressMae,setStressMae]=useState(10); // % peggioramento MAE
+  const [stressMfe,setStressMfe]=useState(10);
+  const [stressMae,setStressMae]=useState(10);
+  const [tradeMode,setTradeMode]=useState("all"); // "all" | "sequential"
 
   // filtro trade
-  const filtered=trades.filter(function(t){
+  const filteredAll=trades.filter(function(t){
     if(selConti.length>0&&!selConti.includes(t.conto_id)) return false;
     if(selStrat.length>0&&!selStrat.includes(t.strategia_id)) return false;
     return true;
-  });
+  }).sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);});
+
+  // Filtro sequenziale
+  const filteredSeq=(function(){
+    var seq=[];var lastExit=null;
+    filteredAll.forEach(function(t){
+      var openT=new Date(t.data_apertura);
+      if(lastExit&&openT<lastExit) return;
+      seq.push(t);
+      if(t.mfe!=null&&t.mfe>=tp&&t.mfe_time){lastExit=new Date(t.mfe_time);}
+      else{lastExit=t.data_chiusura?new Date(t.data_chiusura):openT;}
+    });
+    return seq;
+  })();
+  const filtered=tradeMode==="sequential"?filteredSeq:filteredAll;
+  const seqSkipped=filteredAll.length-filteredSeq.length;
 
   // calcola R massimo dai MFE reali (arrotondato a 0.1)
   const mfeR=filtered.filter(function(t){return t.mfe!=null;}).map(function(t){
@@ -3919,6 +3960,17 @@ function Ottimizzazione({c,trades,strategie,conti}){
 
       <div style={{flex:1,overflow:"auto",padding:"14px 20px"}}>
         <DisclaimerCampione n={filtered.length} c={c}/>
+        {/* FILTRO MODALITÀ TRADE — Ottimizzazione Live */}
+        {filtered.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"8px 14px",borderRadius:9,background:c.card,border:"1px solid "+(tradeMode==="sequential"?c.am+"60":c.bd)}}>
+            <div style={{fontSize:10,fontWeight:700,color:c.txm}}>MODALITÀ:</div>
+            <select value={tradeMode} onChange={function(e){setTradeMode(e.target.value);}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(tradeMode==="sequential"?c.am:c.ac+"50"),background:c.inp,color:c.tx,fontSize:11,fontWeight:600,fontFamily:"inherit",outline:"none",cursor:"pointer"}}>
+              <option value="all">Tutti i trade (anche sovrapposti)</option>
+              <option value="sequential">Un trade alla volta (sequenziale)</option>
+            </select>
+            {tradeMode==="sequential"&&<div style={{fontSize:10,color:c.am,fontWeight:700}}>{filtered.length}/{filteredAll.length} trade · {seqSkipped} saltati</div>}
+          </div>
+        )}
         {filtered.length===0?(
           <div style={{textAlign:"center",padding:"60px",color:c.txm,fontSize:13}}>Nessun trade nel campione. Seleziona un conto o inserisci dei trade.</div>
         ):(
@@ -5532,7 +5584,7 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
   // form nuovo trade backtest — ricorda ultima data inserita
   const [lastBtDate,setLastBtDate]=useState("");
   function btTodayStr(){const n=new Date();const pad=function(x){return String(x).padStart(2,"0");};return n.getFullYear()+"-"+pad(n.getMonth()+1)+"-"+pad(n.getDate())+"T"+pad(n.getHours())+":"+pad(n.getMinutes());}
-  const initTForm=function(d){return {data:d||(lastBtDate||btTodayStr()),data_chiusura:"",direzione:"L",entry:"",sl:"",exit:"",mae:"",mfe:"",mfe_time:"",params:[],note:"",confidence:0};};
+  const initTForm=function(d){return {data:d||(lastBtDate||btTodayStr()),data_chiusura:"",direzione:"L",entry:"",sl:"",exit:"",mae:"",mfe:"",mfe_time:d||(lastBtDate||""),params:[],note:"",confidence:0};};
   const [tForm,setTForm]=useState(initTForm(""));
   // stato per editing trade backtest
   const [editingTrade,setEditingTrade]=useState(null); // id del trade in modifica
@@ -5541,6 +5593,7 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
   const [simBeR,setSimBeR]=useState(0);
   const [simParz1Pct,setSimParz1Pct]=useState(0);
   const [simParz1R,setSimParz1R]=useState(0);
+  const [simTradeMode,setSimTradeMode]=useState("all"); // "all" | "sequential"
 
   // carica dati da IndexedDB
   async function loadBt(){
@@ -5742,8 +5795,26 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
 
   const paramStats=allParams.map(function(p){return {nome:p.nome,famiglia:p.famiglia,...metricsPerParam(p.nome)};}).filter(function(p){return p.n>0;}).sort(function(a,b){return b.exp-a.exp;});
   const topCombo=topCombinazioni(3);
-  const metGlobali=calcMetrics(tradesCorrente);
-  const eqCurve=buildEquityCurve(tradesCorrente.slice().sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);}),{});
+
+  // ── FILTRO SEQUENZIALE GLOBALE ──
+  // Calcola trade sequenziali (un trade alla volta) basato su mfe_time
+  const tradesCorrenteSorted=tradesCorrente.slice().sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);});
+  const tradesCorrenteSeq=(function(){
+    var seq=[];var lastExit=null;
+    tradesCorrenteSorted.forEach(function(t){
+      var openT=new Date(t.data_apertura);
+      if(lastExit&&openT<lastExit) return;
+      seq.push(t);
+      if(t.mfe!=null&&t.mfe>=simTpR&&t.mfe_time){lastExit=new Date(t.mfe_time);}
+      else{lastExit=t.data_chiusura?new Date(t.data_chiusura):openT;}
+    });
+    return seq;
+  })();
+  const tradesCorrenteFilt=simTradeMode==="sequential"?tradesCorrenteSeq:tradesCorrente;
+  const skippedCount=tradesCorrente.length-tradesCorrenteSeq.length;
+
+  const metGlobali=calcMetrics(tradesCorrenteFilt);
+  const eqCurve=buildEquityCurve(tradesCorrenteFilt.slice().sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);}),{});
 
   // ── VISTA LISTA PROGETTI ──
   if(view==="lista"){
@@ -5916,6 +5987,19 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
 
       <div style={{flex:1,overflow:"auto",padding:"14px 20px"}}>
         <DisclaimerCampione n={tradesCorrente.length} c={c}/>
+
+        {/* ── FILTRO MODALITÀ TRADE (visibile in overview, analytics, ottimizzazione) ── */}
+        {(anTab==="overview"||anTab==="analytics"||anTab==="ottimizzazione")&&tradesCorrente.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"8px 14px",borderRadius:9,background:c.card,border:"1px solid "+(simTradeMode==="sequential"?c.am+"60":c.bd)}}>
+            <div style={{fontSize:10,fontWeight:700,color:c.txm}}>MODALITÀ:</div>
+            <select value={simTradeMode} onChange={function(e){setSimTradeMode(e.target.value);}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(simTradeMode==="sequential"?c.am:c.ac+"50"),background:c.inp,color:c.tx,fontSize:11,fontWeight:600,fontFamily:"inherit",outline:"none",cursor:"pointer"}}>
+              <option value="all">Tutti i trade (anche sovrapposti)</option>
+              <option value="sequential">Un trade alla volta (sequenziale)</option>
+            </select>
+            {simTradeMode==="sequential"&&<div style={{fontSize:10,color:c.am,fontWeight:700}}>{tradesCorrenteFilt.length}/{tradesCorrente.length} trade · {skippedCount} saltati</div>}
+            {simTradeMode==="sequential"&&tradesCorrenteSeq.length===tradesCorrente.length&&<div style={{fontSize:10,color:c.gr}}>Nessun trade sovrapposto</div>}
+          </div>
+        )}
 
         {/* ── OVERVIEW ── */}
         {anTab==="overview"&&(
@@ -6091,14 +6175,14 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
 
         {/* ── ANALYTICS ── */}
         {anTab==="analytics"&&(function(){
-          if(tradesCorrente.length<3) return(
+          if(tradesCorrenteFilt.length<3) return(
             <div style={{textAlign:"center",padding:"60px",color:c.txm,fontSize:12}}>
               <div style={{fontSize:28,marginBottom:10}}>📈</div>
               <div style={{fontWeight:700,marginBottom:4}}>Dati insufficienti</div>
               <div>Inserisci almeno 3 trade per vedere le analytics.</div>
             </div>
           );
-          const sorted=tradesCorrente.slice().sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);});
+          const sorted=tradesCorrenteFilt.slice().sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);});
           // Giorni settimana
           const DAYS=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
           const dayMap={};
@@ -6417,11 +6501,30 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
           const hasMFE=tradesCorrente.filter(function(t){return t.mfe!=null;}).length>=3;
 
           // arricchisce ogni trade con mfeR (già in R)
-          const enriched=tradesCorrente.map(function(t){
+          const enrichedAll=tradesCorrente.map(function(t){
             const mfeR=t.mfe!=null?parseFloat(t.mfe):null;
             const maeR=null;// MAE rimosso
             return {...t,mfeR,maeR};
-          });
+          }).sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);});
+
+          // ── FILTRO: Tutti i trade vs Un trade alla volta ──
+          var enriched=enrichedAll;
+          if(typeof simTradeMode!=="undefined"&&simTradeMode==="sequential"){
+            // Filtra: prendi solo trade che non si sovrappongono
+            var seqTrades=[];var lastExit=null;
+            enrichedAll.forEach(function(t){
+              var openT=new Date(t.data_apertura);
+              if(lastExit&&openT<lastExit) return; // skip sovrapposto
+              seqTrades.push(t);
+              // Calcola uscita simulata
+              if(t.mfeR!=null&&t.mfeR>=simTpR&&t.mfe_time){
+                lastExit=new Date(t.mfe_time);
+              } else {
+                lastExit=t.data_chiusura?new Date(t.data_chiusura):openT;
+              }
+            });
+            enriched=seqTrades;
+          }
 
           // Ottimizzazione TP automatica
           function simTP(tpR){
@@ -6608,31 +6711,61 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
                     </div>
                   );})}
                 </div>
-                {/* Dual equity curve */}
+                {/* Dual equity curve — GRANDE E PULITA */}
                 {dualEq.length>2&&(function(){
-                  const h=90;const w_=dualEq.length;
-                  const minV=Math.min(...dualEq.map(function(p){return Math.min(p.orig,p.man);}));
-                  const maxV=Math.max(...dualEq.map(function(p){return Math.max(p.orig,p.man);}));
-                  const range=Math.max(maxV-minV,0.01);
-                  function toY(v){return h-(((v-minV)/range)*(h-10)+5);}
-                  function buildPath(key){
-                    return dualEq.map(function(p,i){
-                      const x=(i/(dualEq.length-1))*100;
-                      const y=toY(p[key]);
-                      return (i===0?"M":"L")+x.toFixed(1)+","+y.toFixed(1);
-                    }).join(" ");
-                  }
+                  const H=220;const W=600;const PL=50;const PR=10;const PT=10;const PB=30;
+                  const chartW=W-PL-PR;const chartH=H-PT-PB;
+                  const allVals=dualEq.flatMap(function(p){return [p.orig,p.man];});
+                  const minV=Math.min.apply(null,allVals);const maxV=Math.max.apply(null,allVals);
+                  const range=maxV-minV||1;
+                  function toX(i){return PL+(i/(dualEq.length-1))*chartW;}
+                  function toY(v){return PT+chartH-((v-minV)/range)*chartH;}
+                  // Griglia Y (5 livelli)
+                  var ySteps=5;var yLabels=[];
+                  for(var yi=0;yi<=ySteps;yi++){var yVal=minV+(range/ySteps)*yi;yLabels.push({v:parseFloat(yVal.toFixed(1)),y:toY(yVal)});}
+                  // Griglia X (etichette trade number)
+                  var xSteps=Math.min(dualEq.length-1,8);var xLabels=[];
+                  for(var xi=0;xi<=xSteps;xi++){var idx=Math.round((xi/xSteps)*(dualEq.length-1));xLabels.push({i:idx,x:toX(idx)});}
+                  // Path
+                  var origPath=dualEq.map(function(p,i){return (i===0?"M":"L")+toX(i).toFixed(1)+","+toY(p.orig).toFixed(1);}).join(" ");
+                  var manPath=dualEq.map(function(p,i){return (i===0?"M":"L")+toX(i).toFixed(1)+","+toY(p.man).toFixed(1);}).join(" ");
+                  // Area fill per simulata
+                  var areaPath=manPath+" L"+toX(dualEq.length-1).toFixed(1)+","+toY(0).toFixed(1)+" L"+toX(0).toFixed(1)+","+toY(0).toFixed(1)+" Z";
+                  var lastOrig=dualEq[dualEq.length-1].orig;var lastMan=dualEq[dualEq.length-1].man;
                   return(
-                    <div>
-                      <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:6,textTransform:"uppercase"}}>Equity curve: Originale vs Simulata</div>
-                      <svg viewBox={"0 0 100 "+h} style={{width:"100%",height:h,display:"block"}}>
-                        <line x1="0" y1={toY(0).toFixed(1)} x2="100" y2={toY(0).toFixed(1)} stroke={c.bd} strokeWidth="0.5" strokeDasharray="2,2"/>
-                        <path d={buildPath("orig")} fill="none" stroke={c.txm} strokeWidth="1.5" opacity="0.6"/>
-                        <path d={buildPath("man")} fill="none" stroke={c.ac} strokeWidth="2"/>
+                    <div style={{background:c.card,borderRadius:12,padding:"16px 18px",border:"1px solid "+c.bd}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                        <div style={{fontSize:13,fontWeight:800}}>Equity Curve: Originale vs Simulata</div>
+                        <div style={{display:"flex",gap:14,fontSize:10}}>
+                          <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:14,height:3,background:c.txm,display:"inline-block",borderRadius:2,opacity:0.5}}/><span style={{color:c.txm}}>Originale ({lastOrig>=0?"+":""}{lastOrig}R)</span></span>
+                          <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:14,height:3,background:c.ac,display:"inline-block",borderRadius:2}}/><span style={{color:c.ac,fontWeight:700}}>Simulata ({lastMan>=0?"+":""}{lastMan}R)</span></span>
+                        </div>
+                      </div>
+                      <svg width="100%" viewBox={"0 0 "+W+" "+H} style={{display:"block",overflow:"visible"}}>
+                        <defs><linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={c.ac} stopOpacity="0.12"/><stop offset="100%" stopColor={c.ac} stopOpacity="0.01"/></linearGradient></defs>
+                        {/* Griglia Y */}
+                        {yLabels.map(function(yl,i){return(<g key={i}><line x1={PL} y1={yl.y} x2={W-PR} y2={yl.y} stroke={c.bd} strokeWidth="0.5" strokeDasharray={yl.v===0?"none":"3,3"} opacity={yl.v===0?0.8:0.4}/><text x={PL-6} y={yl.y+3} textAnchor="end" fontSize="9" fill={c.txm} fontWeight={yl.v===0?700:400}>{yl.v>=0?"+":""}{yl.v}R</text></g>);})}
+                        {/* Griglia X */}
+                        {xLabels.map(function(xl,i){return(<g key={i}><line x1={xl.x} y1={PT} x2={xl.x} y2={H-PB} stroke={c.bd} strokeWidth="0.5" opacity="0.2"/><text x={xl.x} y={H-PB+14} textAnchor="middle" fontSize="9" fill={c.txm}>#{xl.i}</text></g>);})}
+                        {/* Etichetta asse */}
+                        <text x={W/2} y={H-2} textAnchor="middle" fontSize="9" fill={c.txm} fontWeight="600">Trade</text>
+                        <text x={6} y={H/2} textAnchor="middle" fontSize="9" fill={c.txm} fontWeight="600" transform={"rotate(-90,6,"+(H/2)+")"}>R cumulativo</text>
+                        {/* Area fill simulata */}
+                        <path d={areaPath} fill="url(#eqFill)"/>
+                        {/* Linee */}
+                        <path d={origPath} fill="none" stroke={c.txm} strokeWidth="2" strokeLinejoin="round" opacity="0.45" strokeDasharray="5,3"/>
+                        <path d={manPath} fill="none" stroke={c.ac} strokeWidth="2.5" strokeLinejoin="round"/>
+                        {/* Endpoint dots */}
+                        <circle cx={toX(dualEq.length-1)} cy={toY(lastOrig)} r="4" fill={c.txm} opacity="0.5"/>
+                        <circle cx={toX(dualEq.length-1)} cy={toY(lastMan)} r="5" fill={c.ac}/>
+                        {/* Etichette finali */}
+                        <text x={toX(dualEq.length-1)+8} y={toY(lastOrig)+4} fontSize="10" fill={c.txm} fontWeight="700">{lastOrig>=0?"+":""}{lastOrig}R</text>
+                        <text x={toX(dualEq.length-1)+8} y={toY(lastMan)+4} fontSize="10" fill={c.ac} fontWeight="700">{lastMan>=0?"+":""}{lastMan}R</text>
                       </svg>
-                      <div style={{display:"flex",gap:16,marginTop:4}}>
-                        <div style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:c.txm}}><div style={{width:16,height:2,background:c.txm,opacity:0.6}}/> Originale ({metGlobali.totalR>=0?"+":""}{metGlobali.totalR}R)</div>
-                        <div style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:c.ac}}><div style={{width:16,height:2,background:c.ac}}/> Simulata ({simTotalR>=0?"+":""}{simTotalR}R)</div>
+                      <div style={{display:"flex",gap:10,marginTop:10}}>
+                        <div style={{flex:1,background:c.bg,borderRadius:8,padding:"8px 12px",textAlign:"center"}}><div style={{fontSize:8,color:c.txm,fontWeight:600}}>DELTA</div><div style={{fontSize:15,fontWeight:800,color:lastMan-lastOrig>=0?c.gr:c.rd}}>{lastMan-lastOrig>=0?"+":""}{parseFloat((lastMan-lastOrig).toFixed(2))}R</div></div>
+                        <div style={{flex:1,background:c.bg,borderRadius:8,padding:"8px 12px",textAlign:"center"}}><div style={{fontSize:8,color:c.txm,fontWeight:600}}>TRADE</div><div style={{fontSize:15,fontWeight:800,color:c.tx}}>{dualEq.length-1}</div></div>
+                        <div style={{flex:1,background:c.bg,borderRadius:8,padding:"8px 12px",textAlign:"center"}}><div style={{fontSize:8,color:c.txm,fontWeight:600}}>CONFIGURAZIONE</div><div style={{fontSize:11,fontWeight:700,color:c.ac}}>TP {simTpR}R{simBeR>0?" · BE "+simBeR+"R":""}{simParz1Pct>0?" · Parz "+simParz1Pct+"%@"+simParz1R+"R":""}</div></div>
                       </div>
                     </div>
                   );
