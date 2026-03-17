@@ -1545,7 +1545,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
   const [saving,setSaving]=useState(false);
   // Pre-fill dates: oggi alla mezzanotte locale come punto di partenza
   function todayStr(){const n=new Date();const pad=function(x){return String(x).padStart(2,"0");};return n.getFullYear()+"-"+pad(n.getMonth()+1)+"-"+pad(n.getDate())+"T"+pad(n.getHours())+":"+pad(n.getMinutes());}
-  const [form,setForm]=useState({conto_id:"",strategia_id:"",asset:"",mkt:"",direzione:"L",data_apertura:todayStr(),data_chiusura:todayStr(),r_result:"",mfe:"",rischio_eur:"",commissioni:"",screenshot_url:"",note_tec:"",note_psi:"",mood:"",sc_esecuzione:null,sc_complessivo:null,tags:[],newTag:""});
+  const [form,setForm]=useState({conto_id:"",strategia_id:"",asset:"",mkt:"",direzione:"L",data_apertura:todayStr(),data_chiusura:todayStr(),r_result:"",mfe:"",mfe_time:"",rischio_eur:"",commissioni:"",screenshot_url:"",note_tec:"",note_psi:"",mood:"",sc_esecuzione:null,sc_complessivo:null,tags:[],newTag:""});
   const [ck,setCk]=useState({});
   const [hasParz,setHasParz]=useState(false);
   const [parz,setParz]=useState([{size:"",percentuale:"",prezzo:"",data:"",be:false}]);
@@ -1591,6 +1591,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
       data_apertura:form.data_apertura||new Date().toISOString(),
       data_chiusura:form.data_chiusura||new Date().toISOString(),
       mfe:form.mfe?parseFloat(form.mfe):null,
+      mfe_time:form.mfe_time||null,
       rischio_eur:rischioEur,
       commissioni:form.commissioni?parseFloat(form.commissioni):0,
       pnl_eur:pnlEur,
@@ -1717,21 +1718,28 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
             </div>
             <div style={{background:c.card,borderRadius:11,padding:"13px 15px",border:"1px solid "+c.bd,marginBottom:10}}>
               <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:8,letterSpacing:"0.08em"}}>STEP 4 — RISULTATO IN R</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                 <div>
                   <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>RISULTATO *</div>
                   <input value={form.r_result} onChange={function(e){setForm({...form,r_result:e.target.value});}} placeholder="es. +2  /  -1  /  0" style={{width:"100%",padding:"9px 10px",borderRadius:7,border:"2px solid "+(form.r_result!==""?parseFloat(form.r_result)>0?c.gr:parseFloat(form.r_result)<0?c.rd:c.am:c.inpb),background:c.inp,color:form.r_result!==""?parseFloat(form.r_result)>0?c.gr:parseFloat(form.r_result)<0?c.rd:c.am:c.tx,fontSize:14,fontWeight:700,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                   <div style={{fontSize:9,color:c.txm,marginTop:3}}>Positivo = win · Negativo = loss · 0 = BE</div>
                 </div>
                 <div>
+                  <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>RISCHIO (€/$) (opz.)</div>
+                  <input value={form.rischio_eur} onChange={function(e){setForm({...form,rischio_eur:e.target.value});}} placeholder="es. 100" style={{width:"100%",padding:"9px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                  <div style={{fontSize:9,color:c.txm,marginTop:3}}>Rischiato su questo trade</div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                <div>
                   <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>MFE IN R (opz.)</div>
                   <input value={form.mfe||""} onChange={function(e){setForm({...form,mfe:e.target.value});}} placeholder="es. 3.2" style={{width:"100%",padding:"9px 10px",borderRadius:7,border:"1px solid "+c.am+"50",background:c.inp,color:c.tx,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                   <div style={{fontSize:9,color:c.txm,marginTop:3}}>Massimo a favore raggiunto in R</div>
                 </div>
                 <div>
-                  <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>RISCHIO (€/$) (opz.)</div>
-                  <input value={form.rischio_eur} onChange={function(e){setForm({...form,rischio_eur:e.target.value});}} placeholder="es. 100" style={{width:"100%",padding:"9px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-                  <div style={{fontSize:9,color:c.txm,marginTop:3}}>Rischiato su questo trade</div>
+                  <DatePicker label="ORARIO ARRIVO MFE (opz.)" value={form.mfe_time||""} onChange={function(v){setForm(function(p){return {...p,mfe_time:v};});}} c={c}/>
+                  <div style={{fontSize:9,color:c.txm,marginTop:3}}>Quando il prezzo ha raggiunto il MFE</div>
+                  {form.mfe_time&&form.data_apertura&&(function(){const diff=Math.round((new Date(form.mfe_time)-new Date(form.data_apertura))/60000);return diff>0?<div style={{fontSize:9,color:c.gr,fontWeight:600,marginTop:2}}>⏱ Tempo a MFE: {diff<60?diff+"min":Math.floor(diff/60)+"h "+(diff%60)+"m"}</div>:null;})()}
                 </div>
               </div>
               {/* Preview calcolato */}
@@ -4097,6 +4105,68 @@ function Ottimizzazione({c,trades,strategie,conti}){
                     );
                   })()}
                 </div>
+                {/* EQUITY CURVE — UN TRADE ALLA VOLTA (richiede mfe_time) */}
+                {(function(){
+                  // Filtra trade con mfe_time per la simulazione sequenziale
+                  const withMfeTime=filtered.filter(function(t){return t.mfe_time&&t.mfe!=null;}).sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);});
+                  if(withMfeTime.length<3) return null;
+                  // Simula equity "tutti i trade" vs "un trade alla volta"
+                  const allSorted=filtered.filter(function(t){return t.mfe!=null;}).sort(function(a,b){return new Date(a.data_apertura)-new Date(b.data_apertura);});
+                  // Curve A: tutti (come sopra)
+                  var eqA=[0];allSorted.forEach(function(t){var simR=t.mfe>=tp?tp:t.r_result;eqA.push(eqA[eqA.length-1]+simR);});
+                  // Curve B: un trade alla volta — il prossimo trade parte solo se la sua apertura è dopo l'uscita simulata del precedente
+                  var eqB=[0];var lastExitTime=null;var skipped=0;
+                  withMfeTime.forEach(function(t){
+                    var openTime=new Date(t.data_apertura);
+                    if(lastExitTime&&openTime<lastExitTime){skipped++;return;} // skip: trade sovrapposto
+                    var simR=t.mfe>=tp?tp:t.r_result;
+                    eqB.push(eqB[eqB.length-1]+simR);
+                    // Calcola quando sarebbe uscito: se MFE >= TP, esce all'orario MFE (o prima)
+                    // Se MFE < TP, esce alla chiusura reale
+                    if(t.mfe>=tp&&t.mfe_time){
+                      lastExitTime=new Date(t.mfe_time);
+                    } else {
+                      lastExitTime=t.data_chiusura?new Date(t.data_chiusura):new Date(t.data_apertura);
+                    }
+                  });
+                  if(eqB.length<3) return null;
+                  var W=500,H=120,PL=36,PB=18;
+                  var allV2=[...eqA,...eqB];
+                  var minV2=Math.min.apply(null,allV2),maxV2=Math.max.apply(null,allV2);
+                  var range2=maxV2-minV2||1,cH2=H-PB,cW2=W-PL;
+                  var toX2=function(i,len){return PL+(i/Math.max(len-1,1))*cW2;};
+                  var toY2=function(v){return cH2-8-((v-minV2)/range2)*(cH2-16);};
+                  var ptsA=eqA.map(function(v,i){return toX2(i,eqA.length)+","+toY2(v);}).join(" ");
+                  var ptsB=eqB.map(function(v,i){return toX2(i,eqB.length)+","+toY2(v);}).join(" ");
+                  var finalA=eqA[eqA.length-1],finalB=eqB[eqB.length-1];
+                  return(
+                    <div style={{background:c.card,borderRadius:11,padding:"13px 15px",border:"1px solid #D9770640",marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                        <div style={{fontSize:12,fontWeight:700}}>Equity: Tutti vs Un Trade alla Volta</div>
+                        <div style={{display:"flex",gap:10,fontSize:10,color:c.txm}}>
+                          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:2,background:"#0F766E",display:"inline-block",borderRadius:2}}/> Tutti ({allSorted.length})</span>
+                          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:2,background:"#D97706",display:"inline-block",borderRadius:2}}/> Sequenziale ({eqB.length-1})</span>
+                        </div>
+                      </div>
+                      <div style={{fontSize:10,color:c.txm,marginBottom:10}}>La curva arancione simula un solo trade aperto alla volta: il prossimo trade parte solo dopo che il precedente è uscito al TP simulato. {skipped} trade saltati perché sovrapposti.</div>
+                      <svg width="100%" viewBox={"0 0 "+W+" "+H} style={{overflow:"visible"}}>
+                        <text x={PL-3} y={toY2(maxV2)+3} textAnchor="end" fontSize="8" fill={c.txm}>{maxV2>0?"+":""}{parseFloat(maxV2.toFixed(1))}R</text>
+                        <text x={PL-3} y={toY2(minV2)+3} textAnchor="end" fontSize="8" fill={c.txm}>{minV2>0?"+":""}{parseFloat(minV2.toFixed(1))}R</text>
+                        {minV2<0&&maxV2>0&&<line x1={PL} y1={toY2(0)} x2={W} y2={toY2(0)} stroke={c.bd} strokeWidth="1" strokeDasharray="3,3"/>}
+                        <polyline points={ptsA} fill="none" stroke="#0F766E" strokeWidth="2" strokeLinejoin="round"/>
+                        <polyline points={ptsB} fill="none" stroke="#D97706" strokeWidth="2" strokeLinejoin="round"/>
+                        <circle cx={toX2(eqA.length-1,eqA.length)} cy={toY2(finalA)} r="3" fill="#0F766E"/>
+                        <circle cx={toX2(eqB.length-1,eqB.length)} cy={toY2(finalB)} r="3" fill="#D97706"/>
+                      </svg>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:10}}>
+                        <div style={{background:c.bg,borderRadius:7,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:8,color:c.txm,fontWeight:600}}>TUTTI I TRADE</div><div style={{fontSize:14,fontWeight:700,color:"#0F766E"}}>{finalA>=0?"+":""}{parseFloat(finalA.toFixed(2))}R</div><div style={{fontSize:9,color:c.txm}}>{allSorted.length} trade</div></div>
+                        <div style={{background:c.bg,borderRadius:7,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:8,color:c.txm,fontWeight:600}}>UN TRADE ALLA VOLTA</div><div style={{fontSize:14,fontWeight:700,color:"#D97706"}}>{finalB>=0?"+":""}{parseFloat(finalB.toFixed(2))}R</div><div style={{fontSize:9,color:c.txm}}>{eqB.length-1} trade eseguiti</div></div>
+                        <div style={{background:c.bg,borderRadius:7,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:8,color:c.txm,fontWeight:600}}>TRADE SALTATI</div><div style={{fontSize:14,fontWeight:700,color:c.am}}>{skipped}</div><div style={{fontSize:9,color:c.txm}}>sovrapposti</div></div>
+                      </div>
+                      {skipped===0&&<div style={{fontSize:10,color:c.gr,marginTop:6,padding:"6px 10px",borderRadius:7,background:c.gr+"10"}}>Nessun trade sovrapposto — le due curve coincidono. I tuoi trade non si accavallano temporalmente.</div>}
+                    </div>
+                  );
+                })()}
                 {/* DISTRIBUZIONE WIN/LOSS SIMULATA */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                   {[{l:"✓ Win",n:simCurrent.wins,tot:simCurrent.total,col:"#0F766E"},{l:"✗ Loss",n:simCurrent.losses,tot:simCurrent.total,col:c.rd},{l:"— BE",n:simCurrent.be,tot:simCurrent.total,col:c.am}].map(function(r,i){
@@ -5462,7 +5532,7 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
   // form nuovo trade backtest — ricorda ultima data inserita
   const [lastBtDate,setLastBtDate]=useState("");
   function btTodayStr(){const n=new Date();const pad=function(x){return String(x).padStart(2,"0");};return n.getFullYear()+"-"+pad(n.getMonth()+1)+"-"+pad(n.getDate())+"T"+pad(n.getHours())+":"+pad(n.getMinutes());}
-  const initTForm=function(d){return {data:d||(lastBtDate||btTodayStr()),data_chiusura:"",direzione:"L",entry:"",sl:"",exit:"",mae:"",mfe:"",params:[],note:"",confidence:0};};
+  const initTForm=function(d){return {data:d||(lastBtDate||btTodayStr()),data_chiusura:"",direzione:"L",entry:"",sl:"",exit:"",mae:"",mfe:"",mfe_time:"",params:[],note:"",confidence:0};};
   const [tForm,setTForm]=useState(initTForm(""));
   // stato per editing trade backtest
   const [editingTrade,setEditingTrade]=useState(null); // id del trade in modifica
@@ -5537,6 +5607,7 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
       data_chiusura:tForm.data_chiusura||null,
       direzione:tForm.direzione,
       mfe:tForm.mfe?parseFloat(tForm.mfe):null,
+      mfe_time:tForm.mfe_time||null,
       params:tForm.params||[],
       note:tForm.note||"",
       confidence:tForm.confidence||0,
@@ -6591,6 +6662,10 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
                   <input type={f.type||"text"} value={tForm[f.k]||""} onChange={function(e){setTForm(function(p){return {...p,[f.k]:e.target.value};});}} placeholder={f.ph||""} style={{width:"100%",padding:"7px 9px",borderRadius:7,border:"1px solid "+c.bd,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                 </div>
               );})}
+              <div>
+                <DatePicker label="ORARIO ARRIVO MFE (opz.)" value={tForm.mfe_time||""} onChange={function(v){setTForm(function(p){return {...p,mfe_time:v};});}} c={c}/>
+                {tForm.mfe_time&&tForm.data&&(function(){const diff=Math.round((new Date(tForm.mfe_time)-new Date(tForm.data))/60000);return diff>0?<div style={{fontSize:9,color:c.gr,fontWeight:600,marginTop:2}}>⏱ Tempo a MFE: {diff<60?diff+"min":Math.floor(diff/60)+"h "+(diff%60)+"m"}</div>:null;})()}
+              </div>
             </div>
             <div style={{marginBottom:12}}>
               <div style={{fontSize:10,fontWeight:600,marginBottom:5}}>Direzione</div>
