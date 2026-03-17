@@ -6009,6 +6009,30 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
           </div>
         )}
 
+        {/* ── AVVISO: trade con MFE ma senza orario MFE ── */}
+        {(anTab==="overview"||anTab==="ottimizzazione")&&(function(){
+          const withMfeNoTime=tradesCorrente.filter(function(t){return t.mfe!=null&&!t.mfe_time;});
+          if(withMfeNoTime.length===0) return null;
+          return(
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"10px 14px",borderRadius:9,background:c.am+"10",border:"1px solid "+c.am+"40"}}>
+              <span style={{fontSize:14}}>⏱</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,fontWeight:600,color:c.am}}>{withMfeNoTime.length} trade hanno MFE ma senza Orario MFE</div>
+                <div style={{fontSize:10,color:c.txm,marginTop:2}}>Clicca per impostare la data apertura come orario MFE — poi dovrai solo correggere l'ora su ciascuno.</div>
+              </div>
+              <button onClick={async function(){
+                for(var i=0;i<withMfeNoTime.length;i++){
+                  var t=withMfeNoTime[i];
+                  await db.bt_trade.update(t.id,{mfe_time:t.data_apertura||new Date().toISOString()});
+                }
+                await loadBt();if(reload)reload();
+              }} style={{padding:"7px 16px",borderRadius:8,background:c.am,border:"none",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                ⏱ Imposta {withMfeNoTime.length} orari MFE
+              </button>
+            </div>
+          );
+        })()}
+
         {/* ── OVERVIEW ── */}
         {anTab==="overview"&&(
           <div>
