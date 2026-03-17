@@ -31,3 +31,12 @@ db.version(3).stores({
   bt_progetti: '++id, nome, asset, created_at',
   bt_trade: '++id, progetto_id, data_apertura, r_result'
 });
+
+// Version 4: supporto entry/sl/exit/mae/mfe_price/mae_price/tags (no schema change needed, Dexie stores extra fields automatically)
+db.version(4).stores({
+  strategie: '++id, nome, stato',
+  conti: '++id, nome, tipo',
+  trade: '++id, conto_id, strategia_id, asset, data_apertura, created_at, r_result, draft',
+  bt_progetti: '++id, nome, asset, created_at',
+  bt_trade: '++id, progetto_id, data_apertura, r_result'
+});
