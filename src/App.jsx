@@ -121,14 +121,17 @@ function makeCapMap(conti){const m={};(conti||[]).forEach(function(cn){const cap
 
 function buildEquityCurve(trades, capMap) {
   let eqR=0, eqEur=0, eqPct=0;
-  return [{i:0,r:0,eur:0,pct:0}].concat(trades.map(function(t,i){
+  // Calcola capitale totale iniziale per tutti i conti coinvolti
+  const contiIds=Array.from(new Set(trades.map(function(t){return t.conto_id;}).filter(Boolean)));
+  const capTotale=contiIds.reduce(function(s,id){return s+(capMap&&capMap[id]?capMap[id]:0);},0);
+  return [{i:0,r:0,eur:capTotale,pct:0}].concat(trades.map(function(t,i){
     eqR+=t.r_result;
     const pnl=t.pnl_eur||0;
     eqEur+=pnl;
     const cap=capMap&&capMap[t.conto_id]>0?capMap[t.conto_id]:null;
     const pctTrade=cap?((pnl/cap)*100):0;
     eqPct+=pctTrade;
-    return {i:i+1,r:parseFloat(eqR.toFixed(2)),eur:parseFloat(eqEur.toFixed(2)),pct:parseFloat(eqPct.toFixed(2))};
+    return {i:i+1,r:parseFloat(eqR.toFixed(2)),eur:parseFloat((capTotale+eqEur).toFixed(2)),pct:parseFloat(eqPct.toFixed(2))};
   }));
 }
 
@@ -729,8 +732,20 @@ function Conti({c,conti,strategie,trades,reload}){
                     </div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:18,fontWeight:700,color:c.tx}}>{cn.valuta||"$"}{(cn.cap_iniz||0).toLocaleString()}</div>
-                    <div style={{fontSize:11,color:pnl_r>=0?c.gr:c.rd,fontWeight:600}}>{fmtR(pnl_r)}</div>
+                    <div style={{fontSize:11,color:c.txm,fontWeight:500}}>Capitale iniziale</div>
+                    <div style={{fontSize:14,fontWeight:600,color:c.tx}}>{cn.valuta||"$"}{(cn.cap_iniz||0).toLocaleString()}</div>
+                    {(function(){
+                      const pnlTot=contoTrades.reduce(function(s,t){return s+(t.pnl_eur||0);},0);
+                      const capAttuale=(cn.cap_iniz||0)+pnlTot;
+                      return pnlTot!==0?(
+                        <div>
+                          <div style={{fontSize:16,fontWeight:800,color:capAttuale>=(cn.cap_iniz||0)?c.gr:c.rd}}>{cn.valuta||"$"}{capAttuale.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+                          <div style={{fontSize:10,color:pnlTot>=0?c.gr:c.rd,fontWeight:600}}>{pnlTot>=0?"+":""}{cn.valuta||"$"}{pnlTot.toFixed(0)} · {fmtR(pnl_r)}</div>
+                        </div>
+                      ):(
+                        <div style={{fontSize:11,color:pnl_r>=0?c.gr:c.rd,fontWeight:600}}>{fmtR(pnl_r)}</div>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div style={{height:1,background:c.bd,marginBottom:10}}/>
@@ -1530,7 +1545,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
   const [saving,setSaving]=useState(false);
   // Pre-fill dates: oggi alla mezzanotte locale come punto di partenza
   function todayStr(){const n=new Date();const pad=function(x){return String(x).padStart(2,"0");};return n.getFullYear()+"-"+pad(n.getMonth()+1)+"-"+pad(n.getDate())+"T"+pad(n.getHours())+":"+pad(n.getMinutes());}
-  const [form,setForm]=useState({conto_id:"",strategia_id:"",asset:"",mkt:"",direzione:"L",data_apertura:todayStr(),data_chiusura:todayStr(),r_result:"",mfe:"",rischio_eur:"",commissioni:"",screenshot_url:"",note_tec:"",note_psi:"",mood:"",sc_esecuzione:null,sc_complessivo:null,tags:[]});
+  const [form,setForm]=useState({conto_id:"",strategia_id:"",asset:"",mkt:"",direzione:"L",data_apertura:todayStr(),data_chiusura:todayStr(),r_result:"",mfe:"",rischio_eur:"",commissioni:"",screenshot_url:"",note_tec:"",note_psi:"",mood:"",sc_esecuzione:null,sc_complessivo:null,tags:[],newTag:""});
   const [ck,setCk]=useState({});
   const [hasParz,setHasParz]=useState(false);
   const [parz,setParz]=useState([{size:"",percentuale:"",prezzo:"",data:"",be:false}]);
@@ -1544,6 +1559,8 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
   const r_result=parseFloat(form.r_result)||0;
   const pnl_eur=r_result&&form.rischio_eur?parseFloat((r_result*parseFloat(form.rischio_eur)).toFixed(2)):null;
   const contoObj=conti.find(function(cn){return cn.id===parseInt(form.conto_id);});
+  // Filtra strategie per quelle associate al conto selezionato
+  const filteredStrategie=contoObj&&contoObj.strats&&contoObj.strats.length>0?strategie.filter(function(s){return contoObj.strats.includes(s.id);}):strategie;
   const mktAssets=form.mkt?MKT[form.mkt].assets:[];
   const filteredA=mktAssets.filter(function(a){return a.toLowerCase().includes(assetQ.toLowerCase());});
   useEffect(function(){
@@ -1560,6 +1577,10 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
     if(errors.length>0){showAlert("Controlla i campi","• "+errors.join("\n• "),"warning");return;}
     setSaving(true);
     const rVal=parseFloat(form.r_result);
+    // Parziali: raccogli quelli validi
+    const validParz=hasParz?parz.filter(function(p){return p.percentuale&&parseFloat(p.percentuale)>0;}).map(function(p){
+      return {percentuale:parseFloat(p.percentuale),r_parziale:p.r_parziale?parseFloat(p.r_parziale):null,prezzo:p.prezzo||"",be:p.be||false,data:p.data||""};
+    }):[];
     const rischioEur=form.rischio_eur?parseFloat(form.rischio_eur):null;
     const pnlEur=rischioEur!=null?parseFloat((rVal*rischioEur).toFixed(2)):null;
     const tradeData={
@@ -1582,7 +1603,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
       sc_complessivo:form.sc_complessivo,
       tags:form.tags||[],
       checklist:ck,
-      parziali:[],
+      parziali:validParz,
       created_at:new Date().toISOString(),
       draft:false,
     };
@@ -1652,7 +1673,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
                   <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:4}}>STRATEGIA</div>
                   <select value={form.strategia_id} onChange={function(e){setForm({...form,strategia_id:e.target.value});setCk({});}} style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",cursor:"pointer"}}>
                     <option value="">Nessuna strategia</option>
-                    {strategie.map(function(s){return <option key={s.id} value={s.id}>{s.nome}</option>;})}
+                    {filteredStrategie.map(function(s){return <option key={s.id} value={s.id}>{s.nome}</option>;})}
                   </select>
                 </div>
               </div>
@@ -1704,7 +1725,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
                 </div>
                 <div>
                   <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>MFE IN R (opz.)</div>
-                  <input value={form.mfe} onChange={function(e){setForm({...form,mfe:e.target.value});}} placeholder="es. 3.2" style={{width:"100%",padding:"9px 10px",borderRadius:7,border:"1px solid "+c.am+"50",background:c.inp,color:c.tx,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                  <input value={form.mfe||""} onChange={function(e){setForm({...form,mfe:e.target.value});}} placeholder="es. 3.2" style={{width:"100%",padding:"9px 10px",borderRadius:7,border:"1px solid "+c.am+"50",background:c.inp,color:c.tx,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                   <div style={{fontSize:9,color:c.txm,marginTop:3}}>Massimo a favore raggiunto in R</div>
                 </div>
                 <div>
@@ -1737,7 +1758,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
             </div>
             <div style={{background:c.card,borderRadius:11,padding:"12px 15px",border:"1px solid "+c.bd,marginBottom:10}}>
               <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:8,letterSpacing:"0.08em"}}>EXTRA</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                 <div>
                   <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>COMMISSIONI (opz.)</div>
                   <input value={form.commissioni} onChange={function(e){setForm({...form,commissioni:e.target.value});}} placeholder="es. 3.50" style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
@@ -1745,6 +1766,21 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
                 <div>
                   <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>LINK SCREENSHOT (URL)</div>
                   <input value={form.screenshot_url} onChange={function(e){setForm({...form,screenshot_url:e.target.value});}} placeholder="https://www.tradingview.com/..." style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              </div>
+              <div>
+                <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:4}}>TAG PERSONALIZZATI</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
+                  {(form.tags||[]).map(function(tag){return(
+                    <div key={tag} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,background:c.ac+"15",border:"1px solid "+c.ac+"30"}}>
+                      <span style={{fontSize:10,fontWeight:600,color:c.ac}}>{tag}</span>
+                      <button onClick={function(){setForm({...form,tags:form.tags.filter(function(t){return t!==tag;})});}} style={{width:12,height:12,borderRadius:"50%",border:"none",background:"transparent",color:c.ac,cursor:"pointer",fontSize:10,lineHeight:1,padding:0}}>×</button>
+                    </div>
+                  );})}
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  <input value={form.newTag||""} onChange={function(e){setForm({...form,newTag:e.target.value});}} onKeyDown={function(e){if(e.key==="Enter"&&form.newTag&&form.newTag.trim()){e.preventDefault();setForm({...form,tags:[...(form.tags||[]),form.newTag.trim()],newTag:""});}}} placeholder="es. London Session, A+ Setup" style={{flex:1,padding:"7px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                  <button onClick={function(){if(form.newTag&&form.newTag.trim()){setForm({...form,tags:[...(form.tags||[]),form.newTag.trim()],newTag:""});}}} style={{padding:"7px 12px",borderRadius:7,border:"1px solid "+c.ac+"40",background:c.ac+"10",color:c.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+ Aggiungi</button>
                 </div>
               </div>
             </div>
@@ -1759,10 +1795,9 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
             {hasParz&&parz.map(function(p,i){return(
               <div key={i} style={{background:c.card,borderRadius:11,padding:"13px 15px",border:"1px solid "+c.bd,marginBottom:8}}>
                 <div style={{fontSize:10,fontWeight:700,color:c.txm,marginBottom:8}}>PARZIALE #{i+1}</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                  {[{l:"SIZE",k:"size"},{l:"% POSIZIONE",k:"percentuale"},{l:"PREZZO",k:"prezzo"}].map(function(f){return(
-                    <div key={f.k}><div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>{f.l}</div><input value={p[f.k]||""} onChange={function(e){const np=[...parz];np[i]={...np[i],[f.k]:e.target.value};setParz(np);}} style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/></div>
-                  );})}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                  <div><div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>A QUALE R</div><input value={p.r_parziale||""} onChange={function(e){const np=[...parz];np[i]={...np[i],r_parziale:e.target.value};setParz(np);}} placeholder="es. 1.5" style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1px solid "+c.ac+"50",background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/></div>
+                  <div><div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>% POSIZIONE CHIUSA</div><input value={p.percentuale||""} onChange={function(e){const np=[...parz];np[i]={...np[i],percentuale:e.target.value};setParz(np);}} placeholder="es. 50" style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1px solid "+c.ac+"50",background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/></div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <label style={{display:"flex",alignItems:"center",gap:5,fontSize:11,cursor:"pointer"}}><input type="checkbox" checked={p.be||false} onChange={function(e){const np=[...parz];np[i]={...np[i],be:e.target.checked};setParz(np);}} style={{width:13,height:13,accentColor:c.ac}}/> Breakeven</label>
@@ -1770,7 +1805,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
                 </div>
               </div>
             );})}
-            {hasParz&&<button onClick={function(){setParz([...parz,{size:"",percentuale:"",prezzo:"",be:false}]);}} style={{width:"100%",padding:"8px",borderRadius:9,border:"1px dashed "+c.ac+"60",background:c.ac+"08",color:c.ac,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+ Aggiungi parziale</button>}
+            {hasParz&&<button onClick={function(){setParz([...parz,{r_parziale:"",percentuale:"",be:false}]);}} style={{width:"100%",padding:"8px",borderRadius:9,border:"1px dashed "+c.ac+"60",background:c.ac+"08",color:c.ac,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+ Aggiungi parziale</button>}
           </div>
         )}
         {tab==="compliance"&&(
@@ -1905,6 +1940,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
 
 // ── JOURNAL DETAIL ────────────────────────────────────────────────────────────
 function JournalDetail({trade,c,onBack,strategie,reload,conti}){
+  const {showConfirm,showAlert,ModalRenderer}=useModal();
   const strat=strategie.find(function(s){return s.id===trade.strategia_id;})||null;
   const win=trade.r_result>0;const be=trade.r_result===0;
   const ckItems=strat?[...(strat.checklist?.bias||[]),...(strat.checklist?.trigger||[]),...(strat.checklist?.contesto||[]),...(strat.checklist?.gestione||[])]:[];
@@ -1919,6 +1955,8 @@ function JournalDetail({trade,c,onBack,strategie,reload,conti}){
     r_result:trade.r_result!=null?String(trade.r_result):"",
     mfe:trade.mfe!=null?String(trade.mfe):"",
     rischio_eur:trade.rischio_eur!=null?String(trade.rischio_eur):"",
+    tags:trade.tags||[],
+    newTag:"",
   });
   const MOODS=["😌 Calmo","😐 Neutro","😰 Ansioso","😤 Frustrato","😵 Euforico","😴 Stanco"];
   async function saveEdit(){
@@ -1936,6 +1974,7 @@ function JournalDetail({trade,c,onBack,strategie,reload,conti}){
       sc_esecuzione:eform.sc_esecuzione,
       sc_complessivo:eform.sc_complessivo,
       screenshot_url:eform.screenshot_url,
+      tags:eform.tags||[],
     });
     await reload();
     setEditing(false);
@@ -2025,6 +2064,16 @@ function JournalDetail({trade,c,onBack,strategie,reload,conti}){
             </div>
           </div>
         )}
+        {trade.tags&&trade.tags.length>0&&(
+          <div style={{background:c.card,borderRadius:12,padding:"14px 16px",border:"1px solid "+c.bd,marginBottom:12}}>
+            <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Tag</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {trade.tags.map(function(tag){return(
+                <span key={tag} style={{padding:"4px 10px",borderRadius:20,background:c.ac+"15",border:"1px solid "+c.ac+"30",fontSize:10,fontWeight:600,color:c.ac}}>{tag}</span>
+              );})}
+            </div>
+          </div>
+        )}
         {strat&&ckItems.length>0&&(
           <div style={{background:c.card,borderRadius:12,padding:"14px 16px",border:"1px solid "+c.bd}}>
             <div style={{fontSize:12,fontWeight:700,marginBottom:10}}>Checklist — {strat.nome}</div>
@@ -2045,7 +2094,7 @@ function JournalDetail({trade,c,onBack,strategie,reload,conti}){
               <div style={{fontSize:15,fontWeight:700}}>Modifica Trade — {trade.asset}</div>
               <button onClick={function(){setEditing(false);}} style={{width:28,height:28,borderRadius:7,border:"1px solid "+c.bd,background:c.tag,cursor:"pointer",fontSize:16,color:c.txm,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
             </div>
-            <div style={{fontSize:9,color:c.txm,marginBottom:14,padding:"7px 10px",borderRadius:7,background:c.ac+"08",border:"1px solid "+c.ac+"20"}}>Puoi modificare prezzi, note, voti e screenshot. L'R viene ricalcolato automaticamente.</div>
+            <div style={{fontSize:9,color:c.txm,marginBottom:14,padding:"7px 10px",borderRadius:7,background:c.ac+"08",border:"1px solid "+c.ac+"20"}}>Puoi modificare R, MFE, note, voti e screenshot.</div>
             {/* risultato in R */}
             <div style={{marginBottom:14}}>
               <div style={{fontSize:10,fontWeight:700,color:c.txm,marginBottom:8,letterSpacing:"0.06em"}}>RISULTATO & MFE</div>
@@ -2061,6 +2110,22 @@ function JournalDetail({trade,c,onBack,strategie,reload,conti}){
                 {[{l:"Link Screenshot",k:"screenshot_url",ph:"https://www.tradingview.com/..."}].map(function(f){return(
                   <div key={f.k}><div style={{fontSize:9,color:c.txm,fontWeight:600,marginBottom:3}}>{f.l}</div><input value={eform[f.k]||""} onChange={function(e){setEform({...eform,[f.k]:e.target.value});}} placeholder={f.ph||""} style={{width:"100%",padding:"7px 9px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/></div>
                 );})}
+              </div>
+            </div>
+            {/* Tags */}
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:700,color:c.txm,marginBottom:8,letterSpacing:"0.06em"}}>TAG</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
+                {(eform.tags||[]).map(function(tag){return(
+                  <div key={tag} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,background:c.ac+"15",border:"1px solid "+c.ac+"30"}}>
+                    <span style={{fontSize:10,fontWeight:600,color:c.ac}}>{tag}</span>
+                    <button onClick={function(){setEform({...eform,tags:eform.tags.filter(function(t){return t!==tag;})});}} style={{width:12,height:12,borderRadius:"50%",border:"none",background:"transparent",color:c.ac,cursor:"pointer",fontSize:10,lineHeight:1,padding:0}}>×</button>
+                  </div>
+                );})}
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <input value={eform.newTag||""} onChange={function(e){setEform({...eform,newTag:e.target.value});}} onKeyDown={function(e){if(e.key==="Enter"&&eform.newTag&&eform.newTag.trim()){e.preventDefault();setEform({...eform,tags:[...(eform.tags||[]),eform.newTag.trim()],newTag:""});}}} placeholder="Aggiungi tag..." style={{flex:1,padding:"6px 9px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                <button onClick={function(){if(eform.newTag&&eform.newTag.trim()){setEform({...eform,tags:[...(eform.tags||[]),eform.newTag.trim()],newTag:""});}}} style={{padding:"6px 10px",borderRadius:7,border:"1px solid "+c.ac+"40",background:c.ac+"10",color:c.ac,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+</button>
               </div>
             </div>
             {/* mood */}
@@ -2105,6 +2170,7 @@ function Journal({c,trades,strategie,conti,reload}){
   const [filtRis,setFiltRis]=useState("tutti");
   const [filtAsset,setFiltAsset]=useState("tutti");
   const [filtStrat,setFiltStrat]=useState("tutti");
+  const [filtTag,setFiltTag]=useState("tutti");
   const [detail,setDetail]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   if(detail) return <JournalDetail trade={detail} c={c} onBack={function(){setDetail(null);}} strategie={strategie} reload={reload} conti={conti}/>;
@@ -2112,6 +2178,8 @@ function Journal({c,trades,strategie,conti,reload}){
   const drafts=trades.filter(function(t){return t.draft===true;});
   const realTrades=trades.filter(function(t){return !t.draft;});
 
+  // Raccogli tutti i tag unici
+  const allTags=Array.from(new Set(realTrades.flatMap(function(t){return t.tags||[];})));
   const assets=["tutti",...Array.from(new Set(realTrades.map(function(t){return t.asset;})))];
   const sorted=realTrades.slice().sort(function(a,b){return new Date(b.data_apertura)-new Date(a.data_apertura);});
   const filtered=sorted.filter(function(t){
@@ -2122,6 +2190,7 @@ function Journal({c,trades,strategie,conti,reload}){
     if(filtRis==="be"&&t.r_result!==0) return false;
     if(filtAsset!=="tutti"&&t.asset!==filtAsset) return false;
     if(filtStrat!=="tutti"&&String(t.strategia_id)!==filtStrat) return false;
+    if(filtTag!=="tutti"&&!(t.tags||[]).includes(filtTag)) return false;
     return true;
   });
   async function delTrade(id){await db.trade.delete(id);await reload();setConfirmDel(null);}
@@ -2177,6 +2246,12 @@ function Journal({c,trades,strategie,conti,reload}){
             <option value="tutti">Strategia</option>
             {strategie.map(function(s){return <option key={s.id} value={String(s.id)}>{s.nome}</option>;})}
           </select>
+          {allTags.length>0&&(
+            <select value={filtTag} onChange={function(e){setFiltTag(e.target.value);}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid "+c.bd,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
+              <option value="tutti">Tag</option>
+              {allTags.map(function(t){return <option key={t} value={t}>{t}</option>;})}
+            </select>
+          )}
         </div>
       </div>
       <div style={{flex:1,overflow:"auto",padding:"14px 20px"}}>
@@ -5367,11 +5442,11 @@ function DisclaimerCampione({n,c}){
 }
 
 // ── BACKTEST ──────────────────────────────────────────────────────────────────
-function Backtest({c,trades,reload}){
+function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,reload}){
   const {showConfirm,showAlert,ModalRenderer}=useModal();
   const [view,setView]=useState("lista"); // lista | progetto
-  const [progetti,setProgetti]=useState([]);
-  const [btTrades,setBtTrades]=useState([]);
+  const [progetti,setProgetti]=useState(btProjectsInit||[]);
+  const [btTrades,setBtTrades]=useState(btTradesInit||[]);
   const [selProgetto,setSelProgetto]=useState(null);
   const [showNuovoProg,setShowNuovoProg]=useState(false);
   const [showNuovoTrade,setShowNuovoTrade]=useState(false);
