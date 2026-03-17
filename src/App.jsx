@@ -1711,7 +1711,15 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
             <div style={{background:c.card,borderRadius:11,padding:"13px 15px",border:"1px solid "+c.bd,marginBottom:10}}>
               <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:8,letterSpacing:"0.08em"}}>STEP 3 — TIMING</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <div><DatePicker label="DATA/ORA APERTURA" value={form.data_apertura} onChange={function(v){setForm(function(p){return {...p,data_apertura:v,data_chiusura:p.data_chiusura||v};});}} c={c}/></div>
+                <div><DatePicker label="DATA/ORA APERTURA" value={form.data_apertura} onChange={function(v){setForm(function(p){
+                  var newDate=v?v.split("T")[0]:"";
+                  function syncDate(existing){
+                    if(!existing) return v;
+                    var parts=existing.split("T");
+                    return newDate+(parts[1]?"T"+parts[1]:"T"+(v.split("T")[1]||"00:00"));
+                  }
+                  return {...p,data_apertura:v,data_chiusura:syncDate(p.data_chiusura),mfe_time:syncDate(p.mfe_time)};
+                });}} c={c}/></div>
                 <div><DatePicker label="DATA/ORA CHIUSURA" value={form.data_chiusura||form.data_apertura} onChange={function(v){setForm(function(p){return {...p,data_chiusura:v};});}} c={c}/></div>
               </div>
               <div style={{fontSize:9,color:c.txm,marginTop:5}}>💡 La chiusura è preimpostata alla data apertura — cambia solo l'ora se necessario</div>
@@ -6783,7 +6791,16 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
             <div style={{fontSize:15,fontWeight:700,marginBottom:16}}>{editingTrade?"✏️ Modifica Trade Backtest":"Aggiungi Trade Backtest"}</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
               <div>
-                <DatePicker label="DATA/ORA APERTURA" value={tForm.data} onChange={function(v){setTForm(function(p){return {...p,data:v,data_chiusura:p.data_chiusura||v};});}} c={c}/>
+                <DatePicker label="DATA/ORA APERTURA" value={tForm.data} onChange={function(v){setTForm(function(p){
+                  // Sincronizza la DATA di chiusura e mfe_time (mantieni l'ora se già impostata)
+                  var newDate=v?v.split("T")[0]:"";
+                  function syncDate(existing){
+                    if(!existing) return v;
+                    var parts=existing.split("T");
+                    return newDate+(parts[1]?"T"+parts[1]:"T"+v.split("T")[1]);
+                  }
+                  return {...p,data:v,data_chiusura:syncDate(p.data_chiusura),mfe_time:syncDate(p.mfe_time)};
+                });}} c={c}/>
               </div>
               <div>
                 <DatePicker label="DATA/ORA CHIUSURA *" value={tForm.data_chiusura||tForm.data} onChange={function(v){setTForm(function(p){return {...p,data_chiusura:v};});}} c={c}/>
