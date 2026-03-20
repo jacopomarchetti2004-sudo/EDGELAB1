@@ -510,7 +510,7 @@ function Strategie({c,strategie,reload}){
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
-  const emptyForm=function(){return {nome:"",stato:"Attiva",tf:"M15",mercati:[],checklist:{bias:[],trigger:[],contesto:[],gestione:[]},note:""};};
+  const emptyForm=function(){return {nome:"",stato:"Attiva",tf:"M15",mercati:[],checklist:{bias:[],trigger:[],contesto:[],conferma:[],gestione:[],altro:[]},note:"",trading_plan:""};};
   const [form,setForm]=useState(emptyForm());
   const [assetQ,setAssetQ]=useState("");
   const [assetOpen,setAssetOpen]=useState(false);
@@ -522,7 +522,7 @@ function Strategie({c,strategie,reload}){
     return function(){document.removeEventListener("mousedown",fn);};
   },[]);
   function openNew(){setForm(emptyForm());setEditing(null);setAssetQ("");setModal(true);}
-  function openEdit(s){setForm({nome:s.nome,stato:s.stato,tf:s.tf,mercati:[...(s.mercati||[])],checklist:{bias:[...(s.checklist?.bias||[])],trigger:[...(s.checklist?.trigger||[])],contesto:[...(s.checklist?.contesto||[])],gestione:[...(s.checklist?.gestione||[])]},note:s.note||""});setEditing(s.id);setAssetQ("");setModal(true);}
+  function openEdit(s){setForm({nome:s.nome,stato:s.stato,tf:s.tf,mercati:[...(s.mercati||[])],checklist:{bias:[...(s.checklist?.bias||[])],trigger:[...(s.checklist?.trigger||[])],contesto:[...(s.checklist?.contesto||[])],conferma:[...(s.checklist?.conferma||[])],gestione:[...(s.checklist?.gestione||[])],altro:[...(s.checklist?.altro||[])]},note:s.note||"",trading_plan:s.trading_plan||""});setEditing(s.id);setAssetQ("");setModal(true);}
   async function save(){
     if(!form.nome.trim()) return;
     if(editing){await db.strategie.update(editing,{...form});}
@@ -539,7 +539,7 @@ function Strategie({c,strategie,reload}){
   function setCkItem(cat,idx,val){const arr=[...form.checklist[cat]];arr[idx]=val;setForm({...form,checklist:{...form.checklist,[cat]:arr}});}
   function removeCkItem(cat,idx){const arr=form.checklist[cat].filter(function(_,i){return i!==idx;});setForm({...form,checklist:{...form.checklist,[cat]:arr}});}
   const statoCol={"Attiva":c.gr,"In pausa":c.am,"Archiviata":c.txm};
-  const CK_CATS=[{k:"bias",l:"BIAS"},{k:"trigger",l:"TRIGGER"},{k:"contesto",l:"CONTESTO"},{k:"gestione",l:"GESTIONE"}];
+  const CK_CATS=[{k:"bias",l:"BIAS"},{k:"trigger",l:"TRIGGER"},{k:"contesto",l:"CONTESTO"},{k:"conferma",l:"CONFERMA"},{k:"gestione",l:"GESTIONE"},{k:"altro",l:"ALTRO"}];
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <div style={{padding:"12px 20px",borderBottom:"1px solid "+c.bd,display:"flex",alignItems:"center",justifyContent:"space-between",background:c.sb,flexShrink:0}}>
@@ -668,6 +668,10 @@ function Strategie({c,strategie,reload}){
                 </div>
               );})}
             </div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:5}}>TRADING PLAN</div>
+              <textarea value={form.trading_plan||""} onChange={function(e){setForm({...form,trading_plan:e.target.value});}} placeholder="Scrivi il tuo piano operativo completo: quando entrare, quando uscire, regole di gestione posizione, size..." style={{width:"100%",height:100,padding:"9px 12px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
+            </div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:5}}>NOTE GENERALI</div>
               <textarea value={form.note} onChange={function(e){setForm({...form,note:e.target.value});}} placeholder="Logica della strategia, quando usarla..." style={{width:"100%",height:80,padding:"9px 12px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
@@ -688,10 +692,10 @@ function Conti({c,conti,strategie,trades,reload}){
   const [modal,setModal]=useState(false);
   const [editing,setEditing]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
-  const emptyForm=function(){return {nome:"",tipo:"Reale",broker:"",valuta:"EUR",cap_iniz:"",stato:"Attivo",strats:[]};};
+  const emptyForm=function(){return {nome:"",tipo:"Reale",broker:"",valuta:"EUR",cap_iniz:"",stato:"Attivo",strats:[],data_apertura:"",note:"",unita_size:"Lotti"};};
   const [form,setForm]=useState(emptyForm());
   function openNew(){setForm(emptyForm());setEditing(null);setModal(true);}
-  function openEdit(cn){setForm({nome:cn.nome,tipo:cn.tipo,broker:cn.broker||"",valuta:cn.valuta||"EUR",cap_iniz:cn.cap_iniz,stato:cn.stato,strats:cn.strats||[]});setEditing(cn.id);setModal(true);}
+  function openEdit(cn){setForm({nome:cn.nome,tipo:cn.tipo,broker:cn.broker||"",valuta:cn.valuta||"EUR",cap_iniz:cn.cap_iniz,stato:cn.stato,strats:cn.strats||[],data_apertura:cn.data_apertura||"",note:cn.note||"",unita_size:cn.unita_size||"Lotti"});setEditing(cn.id);setModal(true);}
   async function save(){
     if(!form.nome.trim()) return;
     const cap=parseFloat(form.cap_iniz)||0;
@@ -815,6 +819,14 @@ function Conti({c,conti,strategie,trades,reload}){
               <div><div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:5}}>BROKER</div><input value={form.broker} onChange={function(e){setForm({...form,broker:e.target.value});}} placeholder="es. IC Markets" style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/></div>
               <div><div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:5}}>CAPITALE INIZIALE</div><input value={form.cap_iniz} onChange={function(e){setForm({...form,cap_iniz:e.target.value});}} placeholder="es. 10000" type="number" style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/></div>
               <div><div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:5}}>STATO</div><select value={form.stato} onChange={function(e){setForm({...form,stato:e.target.value});}} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",cursor:"pointer"}}>{["Attivo","Chiuso","Archiviato"].map(function(s){return <option key={s}>{s}</option>;})}</select></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              <div><div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:5}}>UNITÀ SIZE</div><select value={form.unita_size||"Lotti"} onChange={function(e){setForm({...form,unita_size:e.target.value});}} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",cursor:"pointer"}}>{["Lotti","Contratti"].map(function(u){return <option key={u}>{u}</option>;})}</select></div>
+              <div><div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:5}}>DATA APERTURA</div><input type="date" value={form.data_apertura||""} onChange={function(e){setForm({...form,data_apertura:e.target.value});}} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/></div>
+            </div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:5}}>NOTE</div>
+              <textarea value={form.note||""} onChange={function(e){setForm({...form,note:e.target.value});}} placeholder="Regole prop firm, condizioni broker, appunti..." style={{width:"100%",height:60,padding:"9px 12px",borderRadius:8,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
             </div>
             {strategie.length>0&&(
               <div style={{marginBottom:16}}>
@@ -1555,7 +1567,7 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
   const MOODS=["😌 Calmo","😐 Neutro","😰 Ansioso","😤 Frustrato","😵 Euforico","😴 Stanco"];
   const TABS=[{k:"main",l:"Dati Trade",n:"1"},{k:"parziali",l:"Parziali",n:"2"},{k:"compliance",l:"✓ Checklist",n:"3"},{k:"journal",l:"Journal Emotivo",n:"4"}];
   const stratObj=strategie.find(function(s){return s.id===parseInt(form.strategia_id);});
-  const ckItems=stratObj?[...(stratObj.checklist?.bias||[]),...(stratObj.checklist?.trigger||[]),...(stratObj.checklist?.contesto||[]),...(stratObj.checklist?.gestione||[])]:[];
+  const ckItems=stratObj?[...(stratObj.checklist?.bias||[]),...(stratObj.checklist?.trigger||[]),...(stratObj.checklist?.contesto||[]),...(stratObj.checklist?.conferma||[]),...(stratObj.checklist?.gestione||[]),...(stratObj.checklist?.altro||[])]:[];
   const r_result=parseFloat(form.r_result)||0;
   const pnl_eur=r_result&&form.rischio_eur?parseFloat((r_result*parseFloat(form.rischio_eur)).toFixed(2)):null;
   const contoObj=conti.find(function(cn){return cn.id===parseInt(form.conto_id);});
@@ -1594,6 +1606,8 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
       mfe_time:form.mfe_time||null,
       rischio_eur:rischioEur,
       commissioni:form.commissioni?parseFloat(form.commissioni):0,
+      size:form.size?parseFloat(form.size):null,
+      swap:form.swap?parseFloat(form.swap):0,
       pnl_eur:pnlEur,
       screenshot_url:form.screenshot_url||"",
       r_result:rVal,
@@ -1774,14 +1788,22 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
             </div>
             <div style={{background:c.card,borderRadius:11,padding:"12px 15px",border:"1px solid "+c.bd,marginBottom:10}}>
               <div style={{fontSize:9,fontWeight:700,color:c.txm,marginBottom:8,letterSpacing:"0.08em"}}>EXTRA</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:10}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>SIZE ({contoObj?.unita_size||"Lotti"}) (opz.)</div>
+                  <input value={form.size||""} onChange={function(e){setForm({...form,size:e.target.value});}} placeholder="es. 0.5" style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                </div>
                 <div>
                   <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>COMMISSIONI (opz.)</div>
                   <input value={form.commissioni} onChange={function(e){setForm({...form,commissioni:e.target.value});}} placeholder="es. 3.50" style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                 </div>
                 <div>
-                  <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>LINK SCREENSHOT (URL)</div>
-                  <input value={form.screenshot_url} onChange={function(e){setForm({...form,screenshot_url:e.target.value});}} placeholder="https://www.tradingview.com/..." style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                  <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>SWAP (opz.)</div>
+                  <input value={form.swap||""} onChange={function(e){setForm({...form,swap:e.target.value});}} placeholder="es. -2.30" style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div>
+                  <div style={{fontSize:10,fontWeight:600,color:c.txm,marginBottom:3}}>LINK SCREENSHOT</div>
+                  <input value={form.screenshot_url} onChange={function(e){setForm({...form,screenshot_url:e.target.value});}} placeholder="URL..." style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid "+c.inpb,background:c.inp,color:c.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                 </div>
               </div>
               <div>
@@ -1862,8 +1884,8 @@ function TradeForm({c,strategie,conti,reload,setScreen}){
                   </div>
                   {/* Voci checklist per categoria */}
                   {(function(){
-                    const cats=["bias","trigger","contesto","gestione"];
-                    const catLabels={bias:"📐 Bias",trigger:"⚡ Trigger",contesto:"🌍 Contesto",gestione:"⚙ Gestione"};
+                    const cats=["bias","trigger","contesto","conferma","gestione","altro"];
+                    const catLabels={bias:"📐 Bias",trigger:"⚡ Trigger",contesto:"🌍 Contesto",conferma:"✓ Conferma",gestione:"⚙ Gestione",altro:"📌 Altro"};
                     return cats.map(function(cat){
                       const items=stratObj.checklist?.[cat]||[];
                       if(items.length===0) return null;
@@ -1959,7 +1981,7 @@ function JournalDetail({trade,c,onBack,strategie,reload,conti}){
   const {showConfirm,showAlert,ModalRenderer}=useModal();
   const strat=strategie.find(function(s){return s.id===trade.strategia_id;})||null;
   const win=trade.r_result>0;const be=trade.r_result===0;
-  const ckItems=strat?[...(strat.checklist?.bias||[]),...(strat.checklist?.trigger||[]),...(strat.checklist?.contesto||[]),...(strat.checklist?.gestione||[])]:[];
+  const ckItems=strat?[...(strat.checklist?.bias||[]),...(strat.checklist?.trigger||[]),...(strat.checklist?.contesto||[]),...(strat.checklist?.conferma||[]),...(strat.checklist?.gestione||[]),...(strat.checklist?.altro||[])]:[];
   const [editing,setEditing]=useState(false);
   const [eform,setEform]=useState({
     note_tec:trade.note_tec||"",
@@ -2187,6 +2209,11 @@ function Journal({c,trades,strategie,conti,reload}){
   const [filtAsset,setFiltAsset]=useState("tutti");
   const [filtStrat,setFiltStrat]=useState("tutti");
   const [filtTag,setFiltTag]=useState("tutti");
+  const [filtConto,setFiltConto]=useState("tutti");
+  const [filtDateFrom,setFiltDateFrom]=useState("");
+  const [filtDateTo,setFiltDateTo]=useState("");
+  const [filtVotoMin,setFiltVotoMin]=useState(0);
+  const [filtSearch,setFiltSearch]=useState("");
   const [detail,setDetail]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   if(detail) return <JournalDetail trade={detail} c={c} onBack={function(){setDetail(null);}} strategie={strategie} reload={reload} conti={conti}/>;
@@ -2207,6 +2234,11 @@ function Journal({c,trades,strategie,conti,reload}){
     if(filtAsset!=="tutti"&&t.asset!==filtAsset) return false;
     if(filtStrat!=="tutti"&&String(t.strategia_id)!==filtStrat) return false;
     if(filtTag!=="tutti"&&!(t.tags||[]).includes(filtTag)) return false;
+    if(filtConto!=="tutti"&&String(t.conto_id)!==filtConto) return false;
+    if(filtDateFrom&&t.data_apertura&&t.data_apertura<filtDateFrom) return false;
+    if(filtDateTo&&t.data_apertura&&t.data_apertura>filtDateTo+"T23:59:59") return false;
+    if(filtVotoMin>0&&(t.sc_esecuzione||0)<filtVotoMin) return false;
+    if(filtSearch){var q=filtSearch.toLowerCase();var hay=((t.note_tec||"")+" "+(t.note_psi||"")+" "+(t.asset||"")).toLowerCase();if(!hay.includes(q)) return false;}
     return true;
   });
   async function delTrade(id){await db.trade.delete(id);await reload();setConfirmDel(null);}
@@ -2248,7 +2280,11 @@ function Journal({c,trades,strategie,conti,reload}){
           <div style={{fontSize:15,fontWeight:700,letterSpacing:"-0.02em"}}>Journal</div>
           <div style={{fontSize:10,color:c.txm}}>{filtered.length} trade{drafts.length>0?" · "+drafts.length+" bozze da completare":""}</div>
         </div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+          <select value={filtConto} onChange={function(e){setFiltConto(e.target.value);}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid "+c.bd,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
+            <option value="tutti">Conto</option>
+            {conti.map(function(cn){return <option key={cn.id} value={String(cn.id)}>{cn.nome}</option>;})}
+          </select>
           <select value={filtDir} onChange={function(e){setFiltDir(e.target.value);}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid "+c.bd,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
             <option value="tutti">Direzione</option><option value="long">Long</option><option value="short">Short</option>
           </select>
@@ -2268,7 +2304,24 @@ function Journal({c,trades,strategie,conti,reload}){
               {allTags.map(function(t){return <option key={t} value={t}>{t}</option>;})}
             </select>
           )}
+          <select value={filtVotoMin} onChange={function(e){setFiltVotoMin(parseInt(e.target.value));}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid "+c.bd,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
+            <option value={0}>Voto min</option>
+            {[1,2,3,4,5,6,7,8,9].map(function(v){return <option key={v} value={v}>★ ≥{v}</option>;})}
+          </select>
         </div>
+      </div>
+      {/* Riga filtri avanzati: Date + Ricerca */}
+      <div style={{padding:"6px 20px",borderBottom:"1px solid "+c.bd,background:c.sb,display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <span style={{fontSize:9,fontWeight:700,color:c.txm}}>DAL</span>
+          <input type="date" value={filtDateFrom} onChange={function(e){setFiltDateFrom(e.target.value);}} style={{padding:"4px 7px",borderRadius:6,border:"1px solid "+c.bd,background:c.inp,color:c.tx,fontSize:10,fontFamily:"inherit",outline:"none"}}/>
+          <span style={{fontSize:9,fontWeight:700,color:c.txm}}>AL</span>
+          <input type="date" value={filtDateTo} onChange={function(e){setFiltDateTo(e.target.value);}} style={{padding:"4px 7px",borderRadius:6,border:"1px solid "+c.bd,background:c.inp,color:c.tx,fontSize:10,fontFamily:"inherit",outline:"none"}}/>
+        </div>
+        <div style={{flex:1}}>
+          <input value={filtSearch} onChange={function(e){setFiltSearch(e.target.value);}} placeholder="🔍 Cerca nelle note..." style={{width:"100%",padding:"5px 10px",borderRadius:7,border:"1px solid "+c.bd,background:c.inp,color:c.tx,fontSize:11,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        {(filtDateFrom||filtDateTo||filtSearch||filtVotoMin>0||filtConto!=="tutti")&&<button onClick={function(){setFiltDateFrom("");setFiltDateTo("");setFiltSearch("");setFiltVotoMin(0);setFiltConto("tutti");}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+c.bd,background:"transparent",color:c.txm,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>✕ Reset</button>}
       </div>
       <div style={{flex:1,overflow:"auto",padding:"14px 20px"}}>
         {trades.length===0?(
@@ -3438,7 +3491,7 @@ function Analytics({c,trades,strategie,conti}){
                               {(function(){
                                 const strat2=strategie.find(function(s){return s.id===row.sid;})||null;
                                 if(!strat2) return null;
-                                const allItems=[...(strat2.checklist?.bias||[]),...(strat2.checklist?.trigger||[]),...(strat2.checklist?.contesto||[]),...(strat2.checklist?.gestione||[])];
+                                const allItems=[...(strat2.checklist?.bias||[]),...(strat2.checklist?.trigger||[]),...(strat2.checklist?.contesto||[]),...(strat2.checklist?.conferma||[]),...(strat2.checklist?.gestione||[]),...(strat2.checklist?.altro||[])];
                                 if(allItems.length===0) return null;
                                 const tradesWithCk=filtered.filter(function(t){return t.strategia_id===row.sid&&t.checklist&&Object.keys(t.checklist).length>0;});
                                 if(tradesWithCk.length===0) return null;
@@ -6919,6 +6972,37 @@ function Backtest({c,trades,btProjects:btProjectsInit,btTrades:btTradesInit,relo
 }
 
 // ── APP ROOT ──────────────────────────────────────────────────────────────────
+// ── AUTO-BACKUP SYSTEM ───────────────────────────────────────────────────────
+const BACKUP_KEY="edgelab_autobackup";
+const BACKUP_TS_KEY="edgelab_backup_ts";
+const FIRST_VISIT_KEY="edgelab_first_visit";
+
+async function saveAutoBackup(){
+  try{
+    const [s,cn,t,bp,bt]=await Promise.all([
+      db.strategie.toArray(),db.conti.toArray(),db.trade.toArray(),
+      db.bt_progetti.toArray(),db.bt_trade.toArray()
+    ]);
+    const data={strategie:s,conti:cn,trade:t,bt_progetti:bp,bt_trade:bt};
+    localStorage.setItem(BACKUP_KEY,JSON.stringify(data));
+    localStorage.setItem(BACKUP_TS_KEY,new Date().toISOString());
+  }catch(e){console.warn("Auto-backup failed:",e);}
+}
+
+async function restoreFromBackup(){
+  try{
+    const raw=localStorage.getItem(BACKUP_KEY);
+    if(!raw) return false;
+    const data=JSON.parse(raw);
+    if(data.strategie) for(const item of data.strategie){const {id,...rest}=item;await db.strategie.add(rest);}
+    if(data.conti) for(const item of data.conti){const {id,...rest}=item;await db.conti.add(rest);}
+    if(data.trade) for(const item of data.trade){const {id,...rest}=item;await db.trade.add(rest);}
+    if(data.bt_progetti) for(const item of data.bt_progetti){const {id,...rest}=item;await db.bt_progetti.add(rest);}
+    if(data.bt_trade) for(const item of data.bt_trade){const {id,...rest}=item;await db.bt_trade.add(rest);}
+    return true;
+  }catch(e){console.warn("Restore failed:",e);return false;}
+}
+
 export default function App(){
   const [dark,setDark]=useState(false);
   const [active,setActive]=useState("dashboard");
@@ -6929,6 +7013,9 @@ export default function App(){
   const [btProjects,setBtProjects]=useState([]);
   const [btTrades,setBtTrades]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [showBackupBanner,setShowBackupBanner]=useState(false);
+  const [showRestoreBanner,setShowRestoreBanner]=useState(false);
+  const [restoring,setRestoring]=useState(false);
   const c=dark?D:L;
 
   const reload=useCallback(async function(){
@@ -6937,11 +7024,49 @@ export default function App(){
       db.bt_progetti.toArray(),db.bt_trade.toArray()
     ]);
     setStrategie(s);setConti(cn);setTrades(t);setBtProjects(bp);setBtTrades(bt);
+    // Auto-backup dopo ogni reload (= dopo ogni modifica dati)
+    if(s.length>0||cn.length>0||t.length>0||bp.length>0||bt.length>0){
+      saveAutoBackup();
+    }
   },[]);
 
   useEffect(function(){
-    reload().then(function(){setLoading(false);});
+    reload().then(async function(){
+      setLoading(false);
+      // Controlla se il DB è vuoto ma esiste un backup
+      const [s,cn,t]=await Promise.all([db.strategie.count(),db.conti.count(),db.trade.count()]);
+      const hasBackup=localStorage.getItem(BACKUP_KEY);
+      if(s===0&&cn===0&&t===0&&hasBackup){
+        // DB vuoto con backup disponibile — mostra banner ripristino
+        setShowRestoreBanner(true);
+      }
+      // Mostra banner primo accesso
+      if(!localStorage.getItem(FIRST_VISIT_KEY)){
+        setShowBackupBanner(true);
+        localStorage.setItem(FIRST_VISIT_KEY,"true");
+      }
+    });
   },[reload]);
+
+  // Avviso prima di chiudere il browser se ci sono dati
+  useEffect(function(){
+    function handleBeforeUnload(e){
+      if(trades.length>0||strategie.length>0){
+        e.preventDefault();
+        e.returnValue="";
+      }
+    }
+    window.addEventListener("beforeunload",handleBeforeUnload);
+    return function(){window.removeEventListener("beforeunload",handleBeforeUnload);};
+  },[trades,strategie]);
+
+  async function doRestore(){
+    setRestoring(true);
+    const ok=await restoreFromBackup();
+    if(ok){await reload();}
+    setRestoring(false);
+    setShowRestoreBanner(false);
+  }
 
   function renderScreen(){
     if(loading) return <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:c.txm,fontSize:14}}>Caricamento...</div>;
@@ -6961,10 +7086,40 @@ export default function App(){
     return <Dashboard c={c} setScreen={setScreen} trades={trades} strategie={strategie} conti={conti}/>;
   }
 
+  // Ultimo backup timestamp
+  const backupTs=localStorage.getItem(BACKUP_TS_KEY);
+  const backupAgo=backupTs?(function(){const d=Math.round((Date.now()-new Date(backupTs).getTime())/60000);return d<1?"adesso":d<60?d+" min fa":Math.floor(d/60)+"h fa";})():null;
+
   return (
     <div style={{display:"flex",height:"100vh",width:"100vw",background:c.bg,fontFamily:"system-ui,sans-serif",color:c.tx,overflow:"hidden",fontSize:14}}>
       <Sidebar active={active} setActive={setActive} setScreen={setScreen} dark={dark} setDark={setDark} c={c} trades={trades} strategie={strategie} conti={conti}/>
-      <div style={{flex:1,overflow:"hidden",display:"flex"}}>{renderScreen()}</div>
+      <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+        {/* BANNER RIPRISTINO DATI */}
+        {showRestoreBanner&&(
+          <div style={{padding:"10px 20px",background:"#DC262615",borderBottom:"1px solid #DC262640",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+            <span style={{fontSize:18}}>⚠️</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>I tuoi dati sembrano scomparsi!</div>
+              <div style={{fontSize:11,color:c.txm}}>Il database è vuoto ma abbiamo un backup automatico{backupTs?" del "+new Date(backupTs).toLocaleDateString("it-IT",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}. Vuoi ripristinarlo?</div>
+            </div>
+            <button onClick={doRestore} disabled={restoring} style={{padding:"7px 18px",borderRadius:8,background:"#DC2626",border:"none",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{restoring?"Ripristino...":"Ripristina Dati"}</button>
+            <button onClick={function(){setShowRestoreBanner(false);}} style={{padding:"7px 12px",borderRadius:8,border:"1px solid "+c.bd,background:"transparent",color:c.txm,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Ignora</button>
+          </div>
+        )}
+        {/* BANNER PRIMO ACCESSO */}
+        {showBackupBanner&&!showRestoreBanner&&(
+          <div style={{padding:"10px 20px",background:c.ac+"10",borderBottom:"1px solid "+c.ac+"30",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+            <span style={{fontSize:16}}>💾</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:700,color:c.ac}}>Benvenuto in EdgeLab!</div>
+              <div style={{fontSize:11,color:c.txm}}>I tuoi dati sono salvati nel browser. EdgeLab fa backup automatici, ma ti consigliamo di esportare regolarmente da <strong>Impostazioni → Esporta dati</strong> per sicurezza.</div>
+            </div>
+            <button onClick={function(){setShowBackupBanner(false);}} style={{padding:"5px 12px",borderRadius:7,border:"1px solid "+c.ac+"40",background:"transparent",color:c.ac,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>OK, capito</button>
+          </div>
+        )}
+        {/* INDICATORE BACKUP */}
+        <div style={{flex:1,overflow:"hidden",display:"flex"}}>{renderScreen()}</div>
+      </div>
     </div>
   );
 }
